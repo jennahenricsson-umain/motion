@@ -4,15 +4,20 @@ import React, { useEffect, useRef } from "react";
 import p5 from "p5";
 
 const MotionCanvas = () => {
-  const canvasRef = useRef<HTMLDivElement>(null); //
+  const canvasRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let myP5: p5;
 
+    const getSize = () => ({
+      w: typeof window !== "undefined" ? window.innerWidth : 640,
+      h: typeof window !== "undefined" ? window.innerHeight : 480,
+    });
+
     const init = async () => {
       try {
-        // 1. Importera ml5
         const ml5 = require("ml5");
+        const { w, h } = getSize();
 
         const sketch = (p: p5) => {
           let faceMesh: any;
@@ -25,14 +30,12 @@ const MotionCanvas = () => {
           (p as any).setup = () => {
             if (!canvasRef.current) return;
 
-            // Skapa canvas
-            p.createCanvas(640, 480).parent(canvasRef.current);
+            p.createCanvas(w, h).parent(canvasRef.current);
 
-            // Skapa video
             video = p.createCapture("video" as any, () => {
               console.log("Camera ready");
             });
-            video.size(640, 480);
+            video.size(w, h);
             video.hide();
 
             // Initiera faceMesh här istället för i preload
@@ -45,8 +48,15 @@ const MotionCanvas = () => {
             });
           };
 
+          (p as any).windowResized = () => {
+            const { w: newW, h: newH } = getSize();
+            p.resizeCanvas(newW, newH);
+            if (video) {
+              video.size(newW, newH);
+            }
+          };
+
           (p as any).draw = () => {
-            // Svart bakgrund tills kameran är igång
             p.background(0);
 
             if (video) {
@@ -57,12 +67,11 @@ const MotionCanvas = () => {
               const face = faces[0];
               p.fill(0, 255, 0);
               p.noStroke();
-              
+
               face.keypoints.forEach((kp: any) => {
                 p.circle(kp.x, kp.y, 5);
               });
             } else if (!isModelReady) {
-              // Visa laddningsstatus på skärmen
               p.fill(255);
               p.textAlign(p.CENTER);
               p.text("Loading model", p.width / 2, p.height / 2);
@@ -84,13 +93,11 @@ const MotionCanvas = () => {
   }, []);
 
   return (
-    <div className="flex flex-col items-center justify-center p-4">
-      <div 
-        ref={canvasRef} 
-        className="border-4 border-slate-800 rounded-xl overflow-hidden shadow-2xl bg-black"
-        style={{ width: '640px', height: '480px' }}
-      />
-    </div>
+    <div
+      ref={canvasRef}
+      className="absolute inset-0 w-full h-full bg-black"
+      style={{ width: "100vw", height: "100vh" }}
+    />
   );
 };
 
