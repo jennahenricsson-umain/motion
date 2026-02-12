@@ -19,14 +19,17 @@ const MotionCanvas = () => {
         const ml5 = require("ml5");
         const { w, h } = getSize();
 
+        // Fixed video size – no resizing = no warping; we fit this in the window
+        const VIDEO_W = 640;
+        const VIDEO_H = 480;
+
         const sketch = (p: p5) => {
           let faceMesh: any;
           let video: any;
           let faces: any[] = [];
-          let options = { maxFaces: 1, refineLandmarks: false };
+          let options = { maxFaces: 5, refineLandmarks: false };
           let isModelReady = false;
 
-          // Vi hoppar över preload och gör allt i setup för bättre kontroll i Next.js
           (p as any).setup = () => {
             if (!canvasRef.current) return;
 
@@ -35,10 +38,9 @@ const MotionCanvas = () => {
             video = p.createCapture("video" as any, () => {
               console.log("Camera ready");
             });
-            video.size(w, h);
+            video.size(VIDEO_W, VIDEO_H);
             video.hide();
 
-            // Initiera faceMesh här istället för i preload
             faceMesh = ml5.faceMesh(options, () => {
               console.log("Modell loaded");
               isModelReady = true;
@@ -51,25 +53,31 @@ const MotionCanvas = () => {
           (p as any).windowResized = () => {
             const { w: newW, h: newH } = getSize();
             p.resizeCanvas(newW, newH);
-            if (video) {
-              video.size(newW, newH);
-            }
+          };
+
+          // Cover full screen with video (no bars); overflow is cropped, no warping
+          const fitRect = () => {
+            const scale = Math.max(p.width / VIDEO_W, p.height / VIDEO_H);
+            const drawW = VIDEO_W * scale;
+            const drawH = VIDEO_H * scale;
+            const offsetX = (p.width - drawW) / 2;
+            const offsetY = (p.height - drawH) / 2;
+            return { offsetX, offsetY, drawW, drawH, scale };
           };
 
           (p as any).draw = () => {
             p.background(0);
 
-            if (video) {
-              p.image(video, 0, 0, p.width, p.height);
-            }
+            const { offsetX, offsetY, drawW, drawH, scale } = fitRect();
 
             if (isModelReady && faces.length > 0) {
-              const face = faces[0];
-              p.fill(0, 255, 0);
               p.noStroke();
-
-              face.keypoints.forEach((kp: any) => {
-                p.circle(kp.x, kp.y, 5);
+              faces.forEach((face: any) => {
+                p.fill(255, 255, 255);
+                face.keypoints.forEach((kp: any) => {
+                  const x = offsetX + (VIDEO_W - kp.x) * scale; // flippar x-koordinaten så att skärmen inte blir mirrored
+                  p.circle(x, offsetY + kp.y * scale, 5);
+                });
               });
             } else if (!isModelReady) {
               p.fill(255);
