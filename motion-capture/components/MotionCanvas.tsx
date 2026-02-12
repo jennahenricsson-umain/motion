@@ -4,38 +4,43 @@ import React, { useEffect, useRef } from "react";
 import p5 from "p5";
 
 const MotionCanvas = () => {
-  const canvasRef = useRef<HTMLDivElement>(null); //
+  const canvasRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let myP5: p5;
 
+    const getSize = () => ({
+      w: typeof window !== "undefined" ? window.innerWidth : 640,
+      h: typeof window !== "undefined" ? window.innerHeight : 480,
+    });
+
     const init = async () => {
       try {
-        // 1. Importera ml5
         const ml5 = require("ml5");
+        const { w, h } = getSize();
+
+        // Fixed video size – no resizing = no warping; we fit this in the window
+        const VIDEO_W = 640;
+        const VIDEO_H = 480;
 
         const sketch = (p: p5) => {
           let faceMesh: any;
           let video: any;
           let faces: any[] = [];
-          let options = { maxFaces: 1, refineLandmarks: false };
+          let options = { maxFaces: 5, refineLandmarks: false };
           let isModelReady = false;
 
-          // Vi hoppar över preload och gör allt i setup för bättre kontroll i Next.js
           (p as any).setup = () => {
             if (!canvasRef.current) return;
 
-            // Skapa canvas
-            p.createCanvas(640, 480).parent(canvasRef.current);
+            p.createCanvas(w, h).parent(canvasRef.current);
 
-            // Skapa video
             video = p.createCapture("video" as any, () => {
               console.log("Camera ready");
             });
-            video.size(640, 480);
+            video.size(VIDEO_W, VIDEO_H);
             video.hide();
 
-            // Initiera faceMesh här istället för i preload
             faceMesh = ml5.faceMesh(options, () => {
               console.log("Modell loaded");
               isModelReady = true;
@@ -45,24 +50,36 @@ const MotionCanvas = () => {
             });
           };
 
+          (p as any).windowResized = () => {
+            const { w: newW, h: newH } = getSize();
+            p.resizeCanvas(newW, newH);
+          };
+
+          // Cover full screen with video (no bars); overflow is cropped, no warping
+          const fitRect = () => {
+            const scale = Math.max(p.width / VIDEO_W, p.height / VIDEO_H);
+            const drawW = VIDEO_W * scale;
+            const drawH = VIDEO_H * scale;
+            const offsetX = (p.width - drawW) / 2;
+            const offsetY = (p.height - drawH) / 2;
+            return { offsetX, offsetY, drawW, drawH, scale };
+          };
+
           (p as any).draw = () => {
-            // Svart bakgrund tills kameran är igång
             p.background(0);
 
-            if (video) {
-              p.image(video, 0, 0, p.width, p.height);
-            }
+            const { offsetX, offsetY, drawW, drawH, scale } = fitRect();
 
             if (isModelReady && faces.length > 0) {
-              const face = faces[0];
-              p.fill(0, 255, 0);
               p.noStroke();
-              
-              face.keypoints.forEach((kp: any) => {
-                p.circle(kp.x, kp.y, 5);
+              faces.forEach((face: any) => {
+                p.fill(255, 255, 255);
+                face.keypoints.forEach((kp: any) => {
+                  const x = offsetX + (VIDEO_W - kp.x) * scale; // flippar x-koordinaten så att skärmen inte blir mirrored
+                  p.circle(x, offsetY + kp.y * scale, 5);
+                });
               });
             } else if (!isModelReady) {
-              // Visa laddningsstatus på skärmen
               p.fill(255);
               p.textAlign(p.CENTER);
               p.text("Loading model", p.width / 2, p.height / 2);
@@ -84,13 +101,11 @@ const MotionCanvas = () => {
   }, []);
 
   return (
-    <div className="flex flex-col items-center justify-center p-4">
-      <div 
-        ref={canvasRef} 
-        className="border-4 border-slate-800 rounded-xl overflow-hidden shadow-2xl bg-black"
-        style={{ width: '640px', height: '480px' }}
-      />
-    </div>
+    <div
+      ref={canvasRef}
+      className="absolute inset-0 w-full h-full bg-black"
+      style={{ width: "100vw", height: "100vh" }}
+    />
   );
 };
 
