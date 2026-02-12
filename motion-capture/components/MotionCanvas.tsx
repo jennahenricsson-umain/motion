@@ -3,6 +3,7 @@
 import React, { useEffect, useRef } from "react";
 import p5 from "p5";
 
+// Definera typer
 // Face mesh keypoint (pixel coordinates from ml5/MediaPipe)
 interface FaceKeypoint {
   x: number;
@@ -39,17 +40,20 @@ type P5CaptureElement = p5.Element & {
   hide: () => void;
 };
 
+// The actual component
 const MotionCanvas = () => {
   const canvasRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let myP5: p5;
 
+      // Get the size of the window
     const getSize = (): { w: number; h: number } => ({
       w: typeof window !== "undefined" ? window.innerWidth : 640,
       h: typeof window !== "undefined" ? window.innerHeight : 480,
     });
 
+    // Initialize
     const init = async () => {
       try {
         const ml5 = require("ml5");
@@ -97,6 +101,7 @@ const MotionCanvas = () => {
             p.resizeCanvas(newW, newH);
           };
 
+          // Fit the video to the window
           const fitRect = (): FitRect => {
             const scale = Math.max(p.width / VIDEO_W, p.height / VIDEO_H);
             const drawW = VIDEO_W * scale;
@@ -107,7 +112,8 @@ const MotionCanvas = () => {
           };
 
           p.draw = () => {
-            p.background(0);
+            p.fill(0, 0, 0, 25); // Svart färg med 25 i alfa (0-255)
+            p.rect(0, 0, p.width, p.height); // Ritar en rektangel över hela ytan
 
             const { offsetX, offsetY, scale } = fitRect();
 
