@@ -9,12 +9,12 @@ interface FaceKeypoint {
   x: number;
   y: number;
   z?: number;
-  name?: string;
 }
 
 // Single face result from ml5 faceMesh detection
 interface FaceMeshResult {
   faceOval: { keypoints: FaceKeypoint[] };
+  keypoints: FaceKeypoint[];
 }
 
 // Scaling from video space to display (cover mode)
@@ -111,20 +111,40 @@ const MotionCanvas = () => {
             return { offsetX, offsetY, drawW, drawH, scale };
           };
 
+          let smoothedPoints: FaceKeypoint[] = [];
+
           p.draw = () => {
-            p.fill(0, 0, 0, 25); // Svart färg med 25 i alfa (0-255)
-            p.rect(0, 0, p.width, p.height); // Ritar en rektangel över hela ytan
+            p.background(0, 0, 0, 25); // Svart färg med 25 i alfa för att punkterna ska fadea
 
             const { offsetX, offsetY, scale } = fitRect();
 
             if (isModelReady && faces.length > 0) {
               p.noStroke();
+              
               faces.forEach((face: FaceMeshResult) => {
-                p.fill(255, 255, 255);
-                face.faceOval.keypoints.forEach((kp: FaceKeypoint) => {
-                  p.circle(offsetX + kp.x * scale, offsetY + kp.y * scale, 5);
+                face.faceOval.keypoints.forEach((kp: FaceKeypoint, index: number) => {
+                  const targetX = offsetX + kp.x * scale;
+                  const targetY = offsetY + kp.y * scale;
+
+                  // Om det är första gången, sätt startvärdet direkt
+                  if (!smoothedPoints[index]) {
+                    smoothedPoints[index] = { x: targetX, y: targetY };
+                  }
+
+                  // 2. HÄR HÄNDER MAGIN:
+                  // Vi rör oss bara 15% (0.15) mot målet varje frame
+                  smoothedPoints[index].x = p.lerp(smoothedPoints[index].x, targetX, 0.15);
+                  smoothedPoints[index].y = p.lerp(smoothedPoints[index].y, targetY, 0.15);
+
+                  // 3. Rita ut den UTJÄMNADE punkten istället för rådatan
+                  p.noStroke();
+                  p.fill(255);
+                  p.circle(smoothedPoints[index].x, smoothedPoints[index].y, 5);
+                  //p.fill(255, 255, 255);
+                  //p.circle(offsetX + kp.x * scale, offsetY + kp.y * scale, 5);
                 });
               });
+
             } else if (!isModelReady) {
               p.fill(255);
               p.textAlign(p.CENTER);
