@@ -119,10 +119,23 @@ const MotionCanvas = () => {
             const { offsetX, offsetY, scale } = fitRect();
 
             if (isModelReady && faces.length > 0) {
-              p.noStroke();
-              
               faces.forEach((face: FaceMeshResult) => {
-                face.faceOval.keypoints.forEach((kp: FaceKeypoint, index: number) => {
+                const keypoints = face.faceOval.keypoints;
+
+                // Beräkna genomsnittligt z (djup) för ansiktet – används för färg beroende på avstånd till kameran
+                const avgZ =
+                  keypoints.reduce((sum, kp) => sum + (kp.z ?? 0), 0) /
+                  keypoints.length;
+                // Map z till 0 (nära) … 1 (långt). Justera Z_NEAR/Z_FAR om din kamera ger annat intervall.
+                const Z_NEAR = 50;
+                const Z_FAR = -10;
+                const t = p.constrain(p.map(avgZ, Z_NEAR, Z_FAR, 0, 1), 0, 1);
+                const colorClose = p.color(100, 255, 255); // cyan – nära
+                const colorFar = p.color(255, 50, 255); // magenta – långt
+                const strokeColor = p.lerpColor(colorClose, colorFar, t);
+
+                // Uppdatera utjämnade punkter
+                keypoints.forEach((kp: FaceKeypoint, index: number) => {
                   const targetX = offsetX + kp.x * scale;
                   const targetY = offsetY + kp.y * scale;
 
@@ -131,18 +144,28 @@ const MotionCanvas = () => {
                     smoothedPoints[index] = { x: targetX, y: targetY };
                   }
 
-                  // 2. HÄR HÄNDER MAGIN:
                   // Vi rör oss bara 15% (0.15) mot målet varje frame
                   smoothedPoints[index].x = p.lerp(smoothedPoints[index].x, targetX, 0.15);
                   smoothedPoints[index].y = p.lerp(smoothedPoints[index].y, targetY, 0.15);
-
-                  // 3. Rita ut den UTJÄMNADE punkten istället för rådatan
-                  p.noStroke();
-                  p.fill(255);
-                  p.circle(smoothedPoints[index].x, smoothedPoints[index].y, 5);
-                  //p.fill(255, 255, 255);
-                  //p.circle(offsetX + kp.x * scale, offsetY + kp.y * scale, 5);
                 });
+
+                // Rita linjer från en keypoint till nästa så att det bildar en oval (stängd kurva)
+                p.noFill();
+                p.stroke(strokeColor);
+                p.strokeWeight(3);
+                const n = keypoints.length;
+                for (let i = 0; i < n; i++) {
+                  const from = smoothedPoints[i];
+                  const to = smoothedPoints[(i + 1) % n];
+                  if (from && to) {
+                    p.line(from.x, from.y, to.x, to.y);
+                  }
+                }
+
+                // 3. Rita ut den utjämnade punkten istället för rådatan
+                //p.noStroke();
+                //p.fill(255);
+                //p.circle(smoothedPoints[index].x, smoothedPoints[index].y, 5);
               });
 
             } else if (!isModelReady) {
